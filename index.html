@@ -371,6 +371,38 @@
     @keyframes pulse { 0%,100% { opacity:1; } 50% { opacity:.3; } }
     .pulsing { animation: pulse 1s ease-in-out infinite; }
     .exchange-rate { font-size: 11px; color: var(--muted); margin-top: 4px; }
+
+    /* REMINDER BANNERS */
+    #reminder-area { flex-shrink: 0; }
+    .reminder-banner {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 11px 16px;
+      background: #fffbeb;
+      border-bottom: 1px solid #fde68a;
+      border-left: 3px solid #f59e0b;
+      overflow: hidden;
+    }
+    .r-icon { font-size: 15px; flex-shrink: 0; line-height: 1; }
+    .r-msg { flex: 1; min-width: 0; font-size: 13px; color: #78350f; line-height: 1.4; }
+    .r-actions { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+    .r-save-btn {
+      background: #f59e0b; color: #fff;
+      border: none; border-radius: 6px;
+      padding: 6px 10px; font-size: 12px; font-weight: 700;
+      font-family: inherit; cursor: pointer; white-space: nowrap;
+      -webkit-tap-highlight-color: transparent; touch-action: manipulation;
+    }
+    .r-save-btn:active { opacity: .8; }
+    .r-dismiss-btn {
+      background: none; border: none; color: #92400e;
+      cursor: pointer; padding: 4px; display: flex;
+      align-items: center; justify-content: center;
+      border-radius: 4px; opacity: .55;
+      -webkit-tap-highlight-color: transparent; touch-action: manipulation;
+    }
+    .r-dismiss-btn:active { opacity: 1; }
   </style>
 </head>
 <body>
@@ -379,6 +411,8 @@
     <div class="header-title">Vermogen</div>
     <div class="header-meta" id="hdr-meta"></div>
   </header>
+
+  <div id="reminder-area"></div>
 
   <div class="content" id="main-content">
     <!-- TAB: INVOER -->
@@ -839,7 +873,7 @@ function saveSnapshot() {
   const ct = cryptoTotal();
   if (S.cryptos.length && ct == null) {
     alert$('snap-alert','error','Wacht tot de crypto-koersen geladen zijn.');
-    return;
+    return false;
   }
   const st = schuldenTotal();
   const nw = S.spaargeld + (ct || 0) - st;
@@ -863,6 +897,8 @@ function saveSnapshot() {
   persist();
   alert$('snap-alert','success',`✓ Snapshot opgeslagen: ${fmtEUR(nw)}`);
   setTimeout(() => alert$('snap-alert', null, ''), 3500);
+  checkMissedSnapshots(); // dismiss any reminder banners that are now satisfied
+  return true;
 }
 
 function renderSnapshots() {
@@ -1024,6 +1060,83 @@ function renderChart() {
   });
 }
 
+// ─── REMINDER BANNERS ─────────────────────────────────────────────────────────
+
+// Returns the most recent Monday at 00:00:00 local time
+function getMondayOf(d) {
+  const date = new Date(d);
+  const day  = date.getDay(); // 0 = Sun
+  date.setDate(date.getDate() - (day === 0 ? 6 : day - 1));
+  date.setHours(0, 0, 0, 0);
+  return date;
+}
+
+function curWeekKey() {
+  const m = getMondayOf(new Date());
+  return `${m.getFullYear()}-${String(m.getMonth()+1).padStart(2,'0')}-${String(m.getDate()).padStart(2,'0')}`;
+}
+
+function curMonthKey() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+}
+
+function checkMissedSnapshots() {
+  const monday     = getMondayOf(new Date());
+  const monthStart = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+  const wKey = curWeekKey();
+  const mKey = curMonthKey();
+
+  const hasWeekSnap  = S.snapshots.some(s => new Date(s.timestamp) >= monday);
+  const hasMonthSnap = S.snapshots.some(s => new Date(s.timestamp) >= monthStart);
+
+  const toShow = [];
+  if (!hasWeekSnap  && localStorage.getItem('v2_dis_week')  !== wKey) toShow.push({ type: 'week',  period: 'deze week' });
+  if (!hasMonthSnap && localStorage.getItem('v2_dis_month') !== mKey) toShow.push({ type: 'month', period: 'deze maand' });
+
+  document.getElementById('reminder-area').innerHTML = toShow.map(b => `
+    <div class="reminder-banner" id="reminder-${b.type}">
+      <span class="r-icon">📅</span>
+      <span class="r-msg">Je hebt nog geen snapshot gemaakt ${b.period}. Wil je er nu een opslaan?</span>
+      <div class="r-actions">
+        <button class="r-save-btn" data-type="${b.type}">Sla nu op</button>
+        <button class="r-dismiss-btn" data-type="${b.type}" aria-label="Sluiten">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+    </div>`).join('');
+}
+
+function dismissReminder(type) {
+  if (type === 'week') localStorage.setItem('v2_dis_week',  curWeekKey());
+  else                 localStorage.setItem('v2_dis_month', curMonthKey());
+  const el = document.getElementById('reminder-' + type);
+  if (!el) return;
+  // Animate out
+  el.style.maxHeight  = el.offsetHeight + 'px';
+  el.style.overflow   = 'hidden';
+  el.style.transition = 'max-height .25s ease, opacity .25s ease, padding .25s ease';
+  requestAnimationFrame(() => {
+    el.style.maxHeight = '0';
+    el.style.opacity   = '0';
+    el.style.padding   = '0';
+    setTimeout(() => el.remove(), 260);
+  });
+}
+
+function saveFromReminder(type) {
+  const ok = saveSnapshot(); // returns true/false
+  if (!ok) switchTab('invoer'); // let user see the error on the invoer tab
+  // On success, saveSnapshot() already called checkMissedSnapshots() which clears satisfied banners
+}
+
+document.getElementById('reminder-area').addEventListener('click', e => {
+  const save    = e.target.closest('.r-save-btn');
+  if (save)    { saveFromReminder(save.dataset.type); return; }
+  const dismiss = e.target.closest('.r-dismiss-btn');
+  if (dismiss)   dismissReminder(dismiss.dataset.type);
+});
+
 // ─── EVENT DELEGATION ─────────────────────────────────────────────────────────
 document.getElementById('coin-list').addEventListener('click', e => {
   const btn = e.target.closest('.del-coin');
@@ -1061,6 +1174,7 @@ function init() {
   renderDebtList();
   updateNetWorth();
   if (S.cryptos.length) fetchPrices(false);
+  checkMissedSnapshots();
   if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('sw.js').catch(() => {});
   }
