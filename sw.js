@@ -1,4 +1,4 @@
-const CACHE = 'vermogen-v1';
+const CACHE = 'vermogen-v3';
 
 const PRECACHE = [
   'index.html',
