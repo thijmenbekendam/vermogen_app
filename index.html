@@ -403,6 +403,51 @@
       -webkit-tap-highlight-color: transparent; touch-action: manipulation;
     }
     .r-dismiss-btn:active { opacity: 1; }
+
+    /* STUDIESCHULD */
+    .sd-saldo-lbl { font-size:11px; color:var(--muted); text-transform:uppercase; letter-spacing:.6px; margin-bottom:4px; }
+    .sd-saldo-val { font-size:30px; font-weight:800; letter-spacing:-1px; padding-bottom:14px; margin-bottom:4px; border-bottom:2px solid var(--border); }
+    .sd-stat {
+      display:flex; justify-content:space-between; align-items:center;
+      padding:8px 0; border-bottom:1px solid var(--border); font-size:14px;
+    }
+    .sd-stat:last-of-type { border-bottom:none; }
+    .sd-stat-lbl { color:var(--muted); }
+    .sd-stat-val { font-weight:700; display:flex; align-items:center; gap:6px; }
+    .sd-edit-btn {
+      background:none; border:none; cursor:pointer; padding:2px 5px;
+      color:var(--muted); font-size:13px; border-radius:4px;
+      -webkit-tap-highlight-color:transparent;
+    }
+    .sd-edit-btn:active { background:var(--border); }
+    .sd-edit-row { display:flex; align-items:center; gap:6px; }
+    .sd-edit-row input { width:65px; padding:6px 8px; font-size:14px; }
+    .sd-edit-row .pct { color:var(--muted); font-size:13px; }
+    .sd-repay { margin:14px 0 4px; }
+    .sd-repay-lbl { font-size:11px; font-weight:700; color:var(--muted); text-transform:uppercase; letter-spacing:.8px; margin-bottom:8px; display:flex; align-items:center; gap:6px; }
+    .sd-hist { margin-top:14px; border-top:1.5px solid var(--border); padding-top:2px; }
+    .sd-hist-btn {
+      display:flex; justify-content:space-between; align-items:center;
+      padding:10px 0; cursor:pointer; font-size:13px; font-weight:600;
+      color:var(--muted); -webkit-tap-highlight-color:transparent;
+      background:none; border:none; width:100%; font-family:inherit;
+    }
+    .sd-hist-btn svg { transition:transform .2s; flex-shrink:0; }
+    .sd-hist.open .sd-hist-btn svg { transform:rotate(180deg); }
+    .sd-hist-body { display:none; }
+    .sd-hist.open .sd-hist-body { display:block; }
+    .sd-hi { padding:9px 0; border-bottom:1px solid var(--border); }
+    .sd-hi:last-child { border-bottom:none; }
+    .sd-hi-row { display:flex; align-items:flex-start; gap:8px; font-size:13px; }
+    .sd-hi-info { flex:1; min-width:0; }
+    .sd-hi-name { font-weight:600; }
+    .sd-hi-date { font-size:11px; color:var(--muted); margin-top:1px; }
+    .sd-hi-amt { font-weight:700; font-size:14px; white-space:nowrap; flex-shrink:0; }
+    .sd-hi-amt.rente { color:var(--red); }
+    .sd-hi-amt.aflossing { color:var(--green); }
+    .sd-hi-amt.start { color:var(--muted); }
+    .sd-hi-bal { font-size:11px; color:var(--muted); margin-top:2px; text-align:right; }
+    .sd-del-row { display:flex; justify-content:flex-end; padding-top:14px; margin-top:10px; border-top:1px solid var(--border); }
   </style>
 </head>
 <body>
@@ -488,6 +533,14 @@
         </div>
       </div>
 
+      <!-- Studieschuld -->
+      <div class="card" id="sd-card">
+        <div class="card-title">
+          <div class="card-icon" style="background:#f0fdf4">🎓</div>Studieschuld
+        </div>
+        <div id="sd-content"></div>
+      </div>
+
       <!-- Net Worth -->
       <div class="nw-card">
         <div class="nw-label">Netto Vermogen</div>
@@ -557,9 +610,11 @@
 // ─── STATE ───────────────────────────────────────────────────────────────────
 const S = {
   spaargeld: 0,
-  cryptos: [],    // {id, name, ticker, amount, priceUSD, priceEUR}
-  schulden: [],   // {id, name, amount}
-  snapshots: [],  // {id, timestamp, spaargeld, cryptoEUR, schuldenEUR, netWorth, details}
+  cryptos: [],       // {id, name, ticker, amount, priceUSD, priceEUR}
+  schulden: [],      // {id, name, amount}
+  snapshots: [],     // {id, timestamp, spaargeld, cryptoEUR, schuldenEUR, netWorth, details}
+  studieschuld: null, // see createStudieschuld() for shape
+  sdHistOpen: false, // not persisted — history panel state
   priceCache: null,
   priceCacheTs: 0,
   chartView: 'week',
@@ -573,15 +628,17 @@ function persist() {
     localStorage.setItem('v2_cr', JSON.stringify(S.cryptos));
     localStorage.setItem('v2_sc', JSON.stringify(S.schulden));
     localStorage.setItem('v2_sn', JSON.stringify(S.snapshots));
+    localStorage.setItem('v2_sd', JSON.stringify(S.studieschuld));
   } catch(e) {}
 }
 
 function hydrate() {
   try {
-    S.spaargeld = parseFloat(localStorage.getItem('v2_sp') || '0') || 0;
-    S.cryptos   = JSON.parse(localStorage.getItem('v2_cr') || '[]');
-    S.schulden  = JSON.parse(localStorage.getItem('v2_sc') || '[]');
-    S.snapshots = JSON.parse(localStorage.getItem('v2_sn') || '[]');
+    S.spaargeld      = parseFloat(localStorage.getItem('v2_sp') || '0') || 0;
+    S.cryptos        = JSON.parse(localStorage.getItem('v2_cr') || '[]');
+    S.schulden       = JSON.parse(localStorage.getItem('v2_sc') || '[]');
+    S.snapshots      = JSON.parse(localStorage.getItem('v2_sn') || '[]');
+    S.studieschuld   = JSON.parse(localStorage.getItem('v2_sd') || 'null');
   } catch(e) {}
 }
 
@@ -852,7 +909,11 @@ function cryptoTotal() {
   if (S.cryptos.some(c => c.priceEUR == null)) return null;
   return S.cryptos.reduce((s, c) => s + c.amount * (c.priceEUR || 0), 0);
 }
-function schuldenTotal() { return S.schulden.reduce((s, d) => s + d.amount, 0); }
+function schuldenTotal() {
+  const regular  = S.schulden.reduce((s, d) => s + d.amount, 0);
+  const student  = S.studieschuld ? S.studieschuld.principal : 0;
+  return regular + student;
+}
 
 function updateNetWorth() {
   const ct = cryptoTotal();
@@ -891,7 +952,10 @@ function saveSnapshot() {
         priceEUR: c.priceEUR, priceUSD: c.priceUSD,
         totalEUR: c.amount * (c.priceEUR || 0)
       })),
-      schulden: S.schulden.map(d => ({...d}))
+      schulden: [
+        ...S.schulden.map(d => ({...d})),
+        ...(S.studieschuld ? [{id:'studieschuld', name:'Studieschuld', amount: S.studieschuld.principal}] : [])
+      ]
     }
   });
   persist();
@@ -1060,6 +1124,230 @@ function renderChart() {
   });
 }
 
+// ─── STUDIESCHULD ────────────────────────────────────────────────────────────
+
+// Advance to next calendar month from a "YYYY-MM" key
+function nextMonthKey(ym) {
+  const [y, m] = ym.split('-').map(Number);
+  const d = new Date(y, m, 1); // month m is 0-indexed+1, so new Date(y,m) = month m+1
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+}
+
+function curYM() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+}
+
+// Called on app open: compound any months of interest that have passed
+function applyStudieschuldInterest() {
+  const sd = S.studieschuld;
+  if (!sd || sd.principal <= 0) return;
+  const cur = curYM();
+  let last = sd.lastInterestMonth;
+  let changed = false;
+  while (last < cur) {
+    const next = nextMonthKey(last);
+    if (next > cur) break;
+    const interest = sd.principal * (sd.interestRate / 100 / 12);
+    sd.principal    += interest;
+    sd.totalInterest = (sd.totalInterest || 0) + interest;
+    // Use local-midnight date to avoid UTC-offset display bugs
+    const [ny, nm] = next.split('-').map(Number);
+    const dateISO = new Date(ny, nm - 1, 1).toISOString();
+    sd.history.push({ id: uid(), date: dateISO, type: 'interest', amount: interest, balance: sd.principal });
+    sd.lastInterestMonth = next;
+    last = next;
+    changed = true;
+  }
+  if (changed) persist();
+}
+
+function createStudieschuld() {
+  const principal = parseFloat(document.getElementById('sd-inp-principal').value);
+  const rate      = parseFloat(document.getElementById('sd-inp-rate').value);
+  if (!(principal > 0)) { alert('Voer een geldig openstaand bedrag in.'); return; }
+  if (!(rate > 0))      { alert('Voer een geldig rentepercentage in.'); return; }
+  const ym = curYM();
+  S.studieschuld = {
+    principal,
+    interestRate: rate,
+    lastInterestMonth: ym,
+    totalInterest: 0,
+    history: [{ id: uid(), date: new Date().toISOString(), type: 'start', amount: principal, balance: principal }]
+  };
+  persist();
+  renderStudieschuld();
+  updateNetWorth();
+}
+
+function makeRepayment() {
+  const sd  = S.studieschuld;
+  if (!sd) return;
+  const amt = parseFloat(document.getElementById('sd-repay-inp').value);
+  if (!(amt > 0)) { alert$('sd-repay-alert','error','Voer een geldig bedrag in.'); return; }
+  if (amt > sd.principal) { alert$('sd-repay-alert','error',`Bedrag (${fmtEUR(amt)}) hoger dan saldo (${fmtEUR(sd.principal)}).`); return; }
+  sd.principal = sd.principal - amt;
+  sd.history.push({ id: uid(), date: new Date().toISOString(), type: 'repayment', amount: amt, balance: sd.principal });
+  document.getElementById('sd-repay-inp').value = '';
+  alert$('sd-repay-alert', null, '');
+  persist();
+  renderStudieschuld();
+  updateNetWorth();
+}
+
+function deleteStudieschuld() {
+  if (!confirm('Studieschuld en alle geschiedenis verwijderen?')) return;
+  S.studieschuld = null;
+  S.sdHistOpen = false;
+  persist();
+  renderStudieschuld();
+  updateNetWorth();
+}
+
+function startEditRate() {
+  document.getElementById('sd-rate-stat').style.display = 'none';
+  document.getElementById('sd-rate-edit').style.display = 'flex';
+  const inp = document.getElementById('sd-new-rate');
+  inp.focus(); inp.select();
+}
+function cancelEditRate() {
+  document.getElementById('sd-rate-stat').style.display = '';
+  document.getElementById('sd-rate-edit').style.display = 'none';
+}
+function saveRate() {
+  const rate = parseFloat(document.getElementById('sd-new-rate').value);
+  if (!(rate > 0) || rate > 100) { alert('Voer een geldig rentepercentage in.'); return; }
+  S.studieschuld.interestRate = rate;
+  persist();
+  renderStudieschuld();
+}
+
+function toggleSdHistory() {
+  S.sdHistOpen = !S.sdHistOpen;
+  document.getElementById('sd-hist').classList.toggle('open', S.sdHistOpen);
+}
+
+function showSdForm()  { document.getElementById('sd-empty-wrap').style.display='none'; document.getElementById('sd-add-form').style.display='block'; }
+function hideSdForm()  { document.getElementById('sd-empty-wrap').style.display='block'; document.getElementById('sd-add-form').style.display='none'; }
+
+function renderStudieschuld() {
+  const el = document.getElementById('sd-content');
+  const sd = S.studieschuld;
+
+  if (!sd) {
+    el.innerHTML = `
+      <div id="sd-empty-wrap">
+        <p class="empty" style="padding-top:2px">Geen studieschuld ingesteld.</p>
+        <button class="btn btn-secondary" style="width:100%;margin-top:10px" onclick="showSdForm()">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          Studieschuld toevoegen
+        </button>
+      </div>
+      <div id="sd-add-form" class="add-form" style="display:none;margin-top:10px;margin-bottom:0">
+        <div>
+          <label style="display:block;margin-bottom:5px;font-size:13px;color:var(--muted);font-weight:500">Huidig openstaand bedrag</label>
+          <div class="input-euro">
+            <span class="input-euro-sym">€</span>
+            <input type="number" id="sd-inp-principal" placeholder="0,00" step="0.01" min="0" inputmode="decimal">
+          </div>
+        </div>
+        <div>
+          <label style="display:block;margin-bottom:5px;font-size:13px;color:var(--muted);font-weight:500">Jaarlijks rentepercentage</label>
+          <div class="input-euro">
+            <input type="number" id="sd-inp-rate" value="2.56" step="0.01" min="0" max="100" inputmode="decimal" style="padding-left:13px">
+            <span class="input-euro-sym" style="border-right:none;border-left:1.5px solid var(--border)">%</span>
+          </div>
+        </div>
+        <div style="display:flex;gap:8px">
+          <button class="btn btn-primary" onclick="createStudieschuld()">Opslaan</button>
+          <button class="btn btn-secondary" style="width:auto" onclick="hideSdForm()">Annuleer</button>
+        </div>
+      </div>`;
+    return;
+  }
+
+  const monthly = sd.principal * (sd.interestRate / 100 / 12);
+  const histItems = [...sd.history].reverse().map(h => {
+    const isInt = h.type === 'interest', isRep = h.type === 'repayment';
+    const icon  = isInt ? '📈' : isRep ? '💸' : '🏁';
+    const lbl   = isInt ? 'Rente bijgekomen' : isRep ? 'Aflossing' : 'Startbedrag';
+    const cls   = isInt ? 'rente' : isRep ? 'aflossing' : 'start';
+    const txt   = isInt ? `+${fmtEUR(h.amount)}` : isRep ? `−${fmtEUR(h.amount)}` : fmtEUR(h.amount);
+    return `
+      <div class="sd-hi">
+        <div class="sd-hi-row">
+          <div class="sd-hi-info">
+            <div class="sd-hi-name">${icon} ${lbl}</div>
+            <div class="sd-hi-date">${fmtDate(h.date)}</div>
+          </div>
+          <div class="sd-hi-amt ${cls}">${txt}</div>
+        </div>
+        <div class="sd-hi-bal">Saldo: ${fmtEUR(h.balance)}</div>
+      </div>`;
+  }).join('') || '<div class="empty" style="padding:10px 0">Geen geschiedenis</div>';
+
+  el.innerHTML = `
+    <div class="sd-saldo-lbl">Huidig saldo</div>
+    <div class="sd-saldo-val">${fmtEUR(sd.principal)}</div>
+
+    <div class="sd-stat" id="sd-rate-stat">
+      <span class="sd-stat-lbl">Jaarrente</span>
+      <span class="sd-stat-val">
+        ${sd.interestRate.toFixed(2)}% per jaar
+        <button class="sd-edit-btn" onclick="startEditRate()" title="Aanpassen">✏️</button>
+      </span>
+    </div>
+    <div class="sd-stat" id="sd-rate-edit" style="display:none">
+      <span class="sd-stat-lbl">Rente aanpassen</span>
+      <div class="sd-edit-row">
+        <input type="number" id="sd-new-rate" value="${sd.interestRate}" step="0.01" min="0" max="100" inputmode="decimal">
+        <span class="pct">%</span>
+        <button class="btn btn-sm btn-primary" style="width:auto" onclick="saveRate()">✓</button>
+        <button class="btn btn-sm btn-secondary" style="width:auto" onclick="cancelEditRate()">✗</button>
+      </div>
+    </div>
+    <div class="sd-stat">
+      <span class="sd-stat-lbl">Maandelijkse rente</span>
+      <span class="sd-stat-val" style="color:var(--red)">≈ ${fmtEUR(monthly)}</span>
+    </div>
+    <div class="sd-stat" style="border-bottom:none">
+      <span class="sd-stat-lbl">Totale rente bijgekomen</span>
+      <span class="sd-stat-val" style="color:var(--red)">${fmtEUR(sd.totalInterest)}</span>
+    </div>
+
+    <div class="sd-repay">
+      <div class="sd-repay-lbl">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        Aflossing doen
+      </div>
+      <div style="display:flex;gap:8px">
+        <div class="input-euro" style="flex:1">
+          <span class="input-euro-sym">€</span>
+          <input type="number" id="sd-repay-inp" placeholder="0,00" step="0.01" min="0" inputmode="decimal">
+        </div>
+        <button class="btn btn-primary" style="width:auto" onclick="makeRepayment()">Verwerk</button>
+      </div>
+      <div id="sd-repay-alert"></div>
+    </div>
+
+    <div class="sd-hist" id="sd-hist">
+      <button class="sd-hist-btn" onclick="toggleSdHistory()">
+        <span>Geschiedenis (${sd.history.length})</span>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+      </button>
+      <div class="sd-hist-body">${histItems}</div>
+    </div>
+
+    <div class="sd-del-row">
+      <button class="btn btn-sm btn-danger" onclick="deleteStudieschuld()">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg>
+        Studieschuld verwijderen
+      </button>
+    </div>`;
+
+  if (S.sdHistOpen) document.getElementById('sd-hist').classList.add('open');
+}
+
 // ─── REMINDER BANNERS ─────────────────────────────────────────────────────────
 
 // Returns the most recent Monday at 00:00:00 local time
@@ -1174,6 +1462,8 @@ function init() {
   renderDebtList();
   updateNetWorth();
   if (S.cryptos.length) fetchPrices(false);
+  applyStudieschuldInterest();
+  renderStudieschuld();
   checkMissedSnapshots();
   if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('sw.js').catch(() => {});
