@@ -1,4 +1,4 @@
-const CACHE = 'vermogen-v3';
+const CACHE = 'vermogen-v4';
 
 const PRECACHE = [
   'index.html',
@@ -33,8 +33,9 @@ self.addEventListener('activate', e => {
 self.addEventListener('fetch', e => {
   const url = new URL(e.request.url);
 
-  // Never intercept CoinGecko API — always fresh, network-only
+  // Never intercept live-price APIs — always fresh, network-only
   if (url.hostname === 'api.coingecko.com') return;
+  if (url.hostname.endsWith('finance.yahoo.com')) return;
 
   // Cache-first for everything else
   e.respondWith(

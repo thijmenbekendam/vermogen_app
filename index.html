@@ -272,13 +272,15 @@
     }
     .nw-label { font-size: 11px; opacity: .8; text-transform: uppercase; letter-spacing: .8px; margin-bottom: 6px; }
     .nw-amount { font-size: 44px; font-weight: 800; letter-spacing: -2px; line-height: 1; margin-bottom: 18px; }
-    .nw-breakdown { display: flex; justify-content: center; gap: 0; }
+    .nw-breakdown { display: grid; grid-template-columns: 1fr 1fr; }
     .nw-item {
-      flex: 1; display: flex; flex-direction: column; align-items: center; gap: 3px;
-      padding: 0 4px;
+      display: flex; flex-direction: column; align-items: center; gap: 3px;
+      padding: 8px 4px 4px;
       border-right: 1px solid rgba(255,255,255,.2);
+      border-bottom: 1px solid rgba(255,255,255,.2);
     }
-    .nw-item:last-child { border-right: none; }
+    .nw-item:nth-child(even) { border-right: none; }
+    .nw-item:nth-child(n+3) { border-bottom: none; }
     .nw-item-label { font-size: 10px; opacity: .7; text-transform: uppercase; letter-spacing: .5px; }
     .nw-item-val { font-size: 13px; font-weight: 700; }
 
@@ -448,6 +450,25 @@
     .sd-hi-amt.start { color:var(--muted); }
     .sd-hi-bal { font-size:11px; color:var(--muted); margin-top:2px; text-align:right; }
     .sd-del-row { display:flex; justify-content:flex-end; padding-top:14px; margin-top:10px; border-top:1px solid var(--border); }
+
+    /* AANDELEN & ETFs */
+    .aa-item {
+      display: flex; align-items: center; gap: 10px;
+      padding: 11px 0; border-bottom: 1px solid var(--border);
+    }
+    .aa-item:last-child { border-bottom: none; }
+    .aa-info { flex: 1; min-width: 0; }
+    .aa-name { font-weight: 600; font-size: 15px; }
+    .aa-sub { font-size: 12px; color: var(--muted); margin-top: 1px; }
+    .aa-vals { text-align: right; flex-shrink: 0; }
+    .aa-total { font-weight: 700; font-size: 15px; }
+    .aa-badge {
+      display: inline-block; font-size: 9px; font-weight: 700;
+      padding: 1px 4px; border-radius: 3px;
+      text-transform: uppercase; letter-spacing: .4px;
+    }
+    .aa-badge.auto { background: #dcfce7; color: #15803d; }
+    .aa-badge.manual { background: #f1f5f9; color: #64748b; }
   </style>
 </head>
 <body>
@@ -511,6 +532,43 @@
         </div>
       </div>
 
+      <!-- Aandelen & ETFs -->
+      <div class="card">
+        <div class="card-title">
+          <div class="card-icon" style="background:#ecfdf5">📊</div>Aandelen &amp; ETFs
+          <div style="margin-left:auto;display:flex;align-items:center;gap:8px">
+            <span id="aa-price-ts" style="font-size:11px;color:var(--muted)"></span>
+            <button class="refresh-btn" id="aa-refresh-btn" onclick="fetchStockPrices(true)">
+              <svg id="aa-refresh-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+              Vernieuwen
+            </button>
+          </div>
+        </div>
+        <div class="add-form">
+          <div class="input-row">
+            <input type="text" id="aa-naam" placeholder="Naam (bijv. VWCE)" autocomplete="off" autocorrect="off" spellcheck="false">
+            <input type="text" id="aa-ticker" placeholder="Ticker (bijv. VWCE.AS)" autocomplete="off" autocorrect="off" spellcheck="false" style="flex:0.9">
+          </div>
+          <div class="input-row" style="margin-bottom:4px">
+            <input type="number" id="aa-shares" placeholder="Aantal" step="any" min="0" inputmode="decimal">
+            <div class="input-euro" style="flex:1">
+              <span class="input-euro-sym">€</span>
+              <input type="number" id="aa-price-inp" placeholder="Koers" step="0.01" min="0" inputmode="decimal">
+            </div>
+            <button class="btn btn-secondary btn-sm" id="aa-fetch-btn" onclick="fetchSingleFromForm()" title="Haal live koers op" style="flex-shrink:0">
+              <svg id="aa-fetch-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+            </button>
+          </div>
+          <div id="aa-status" style="font-size:12px;min-height:16px;color:var(--muted)"></div>
+          <button class="btn btn-primary" style="margin-top:6px" onclick="addAandeel()">Voeg toe</button>
+        </div>
+        <div id="aa-list"><div class="empty">Nog geen posities toegevoegd</div></div>
+        <div class="sec-total">
+          <span>Totaal aandelen &amp; ETFs</span>
+          <span id="aa-total">€ —</span>
+        </div>
+      </div>
+
       <!-- Studieschuld -->
       <div class="card" id="sd-card">
         <div class="card-title">
@@ -553,6 +611,10 @@
           <div class="nw-item">
             <span class="nw-item-label">Crypto</span>
             <span class="nw-item-val" id="nb-cr">—</span>
+          </div>
+          <div class="nw-item">
+            <span class="nw-item-label">Aandelen</span>
+            <span class="nw-item-val" id="nb-aa">—</span>
           </div>
           <div class="nw-item">
             <span class="nw-item-label">Schulden</span>
@@ -611,6 +673,7 @@
 const S = {
   spaargeld: 0,
   cryptos: [],       // {id, name, ticker, amount, priceUSD, priceEUR}
+  aandelen: [],      // {id, naam, ticker, shares, pricePerShare, autoPrice}
   schulden: [],      // {id, name, amount}
   snapshots: [],     // {id, timestamp, spaargeld, cryptoEUR, schuldenEUR, netWorth, details}
   studieschuld: null, // see createStudieschuld() for shape
@@ -629,6 +692,7 @@ function persist() {
     localStorage.setItem('v2_sc', JSON.stringify(S.schulden));
     localStorage.setItem('v2_sn', JSON.stringify(S.snapshots));
     localStorage.setItem('v2_sd', JSON.stringify(S.studieschuld));
+    localStorage.setItem('v2_aa', JSON.stringify(S.aandelen));
   } catch(e) {}
 }
 
@@ -639,6 +703,7 @@ function hydrate() {
     S.schulden       = JSON.parse(localStorage.getItem('v2_sc') || '[]');
     S.snapshots      = JSON.parse(localStorage.getItem('v2_sn') || '[]');
     S.studieschuld   = JSON.parse(localStorage.getItem('v2_sd') || 'null');
+    S.aandelen       = JSON.parse(localStorage.getItem('v2_aa') || '[]');
   } catch(e) {}
 }
 
@@ -915,17 +980,23 @@ function schuldenTotal() {
   return regular + student;
 }
 
+function aandelenTotal() {
+  return S.aandelen.reduce((s, a) => s + a.shares * (a.pricePerShare || 0), 0);
+}
+
 function updateNetWorth() {
   const ct = cryptoTotal();
+  const at = aandelenTotal();
   const st = schuldenTotal();
   document.getElementById('nb-sp').textContent = fmtEUR(S.spaargeld);
   document.getElementById('nb-cr').textContent = ct != null ? fmtEUR(ct) : '…';
+  document.getElementById('nb-aa').textContent = fmtEUR(at);
   document.getElementById('nb-sc').textContent = fmtEUR(st);
   if (ct == null && S.cryptos.length) {
     document.getElementById('nw-amount').textContent = '…';
     return;
   }
-  const nw = S.spaargeld + (ct || 0) - st;
+  const nw = S.spaargeld + (ct || 0) + at - st;
   document.getElementById('nw-amount').textContent = fmtEUR(nw);
 }
 
@@ -936,14 +1007,16 @@ function saveSnapshot() {
     alert$('snap-alert','error','Wacht tot de crypto-koersen geladen zijn.');
     return false;
   }
+  const at = aandelenTotal();
   const st = schuldenTotal();
-  const nw = S.spaargeld + (ct || 0) - st;
+  const nw = S.spaargeld + (ct || 0) + at - st;
 
   S.snapshots.push({
     id: uid(),
     timestamp: new Date().toISOString(),
     spaargeld: S.spaargeld,
     cryptoEUR: ct || 0,
+    aandelenEUR: at,
     schuldenEUR: st,
     netWorth: nw,
     details: {
@@ -951,6 +1024,11 @@ function saveSnapshot() {
         name: c.name, ticker: c.ticker, amount: c.amount,
         priceEUR: c.priceEUR, priceUSD: c.priceUSD,
         totalEUR: c.amount * (c.priceEUR || 0)
+      })),
+      aandelen: S.aandelen.map(a => ({
+        naam: a.naam, ticker: a.ticker, shares: a.shares,
+        pricePerShare: a.pricePerShare,
+        totalEUR: a.shares * (a.pricePerShare || 0)
       })),
       schulden: [
         ...S.schulden.map(d => ({...d})),
@@ -979,11 +1057,22 @@ function renderSnapshots() {
         <span class="snap-row-label">${esc(c.name)} × ${fmtNum(c.amount)}</span>
         <span class="snap-row-val">${fmtEUR(c.totalEUR)}</span>
       </div>`).join('');
+    const stocks = (s.details?.aandelen || []).map(a => `
+      <div class="snap-row sub">
+        <span class="snap-row-label">${esc(a.naam)}${a.ticker ? ` (${esc(a.ticker)})` : ''} × ${fmtNum(a.shares)}</span>
+        <span class="snap-row-val">${fmtEUR(a.totalEUR)}</span>
+      </div>`).join('');
     const debts = (s.details?.schulden || []).map(d => `
       <div class="snap-row sub">
         <span class="snap-row-label">${esc(d.name)}</span>
         <span class="snap-row-val" style="color:var(--red)">${fmtEUR(d.amount)}</span>
       </div>`).join('');
+    const aandelenSection = s.aandelenEUR != null ? `
+          <div class="snap-row">
+            <span class="snap-row-label">📊 Aandelen &amp; ETFs</span>
+            <span class="snap-row-val">${fmtEUR(s.aandelenEUR)}</span>
+          </div>
+          ${stocks}` : '';
     return `
       <div class="snap-item" id="sn-${s.id}">
         <div class="snap-header toggle-snap" data-id="${s.id}">
@@ -1004,6 +1093,7 @@ function renderSnapshots() {
             <span class="snap-row-val">${fmtEUR(s.cryptoEUR)}</span>
           </div>
           ${coins}
+          ${aandelenSection}
           <div class="snap-row">
             <span class="snap-row-label">📉 Schulden</span>
             <span class="snap-row-val" style="color:var(--red)">${fmtEUR(s.schuldenEUR)}</span>
@@ -1348,6 +1438,131 @@ function renderStudieschuld() {
   if (S.sdHistOpen) document.getElementById('sd-hist').classList.add('open');
 }
 
+// ─── AANDELEN & ETFs ─────────────────────────────────────────────────────────
+async function fetchSingleStockPrice(ticker) {
+  try {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 6000);
+    const r = await fetch(
+      `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(ticker)}?interval=1d&range=1d`,
+      { signal: controller.signal }
+    );
+    clearTimeout(timer);
+    if (!r.ok) throw new Error(r.status);
+    const d = await r.json();
+    const price = d?.chart?.result?.[0]?.meta?.regularMarketPrice;
+    if (!price || price <= 0) throw new Error('no price');
+    return price;
+  } catch {
+    return null;
+  }
+}
+
+async function fetchSingleFromForm() {
+  const ticker = document.getElementById('aa-ticker').value.trim();
+  const statusEl = document.getElementById('aa-status');
+  if (!ticker) { statusEl.style.color = 'var(--muted)'; statusEl.textContent = 'Voer eerst een ticker in (bijv. VWCE.AS).'; return; }
+  const btn  = document.getElementById('aa-fetch-btn');
+  const icon = document.getElementById('aa-fetch-icon');
+  icon.classList.add('spinning');
+  btn.disabled = true;
+  statusEl.style.color = 'var(--muted)';
+  statusEl.textContent = 'Koers ophalen…';
+  const price = await fetchSingleStockPrice(ticker);
+  icon.classList.remove('spinning');
+  btn.disabled = false;
+  if (price != null) {
+    document.getElementById('aa-price-inp').value = price.toFixed(2);
+    statusEl.style.color = 'var(--green)';
+    statusEl.textContent = `✓ Koers opgehaald: € ${price.toFixed(2)}`;
+  } else {
+    statusEl.style.color = 'var(--red)';
+    statusEl.textContent = 'Kon koers niet ophalen — voer de koers handmatig in.';
+  }
+}
+
+async function fetchStockPrices(force = false) {
+  const autoPriced = S.aandelen.filter(a => a.autoPrice);
+  if (!autoPriced.length) return;
+  const icon = document.getElementById('aa-refresh-icon');
+  const ts   = document.getElementById('aa-price-ts');
+  icon.classList.add('spinning');
+  ts.textContent = 'Laden…';
+  let updated = 0;
+  await Promise.allSettled(autoPriced.map(async a => {
+    const price = await fetchSingleStockPrice(a.ticker);
+    if (price != null) { a.pricePerShare = price; updated++; }
+  }));
+  icon.classList.remove('spinning');
+  if (updated) {
+    const t = new Date();
+    ts.textContent = `${t.getHours()}:${String(t.getMinutes()).padStart(2,'0')}`;
+    persist();
+    renderAandelenList();
+    updateNetWorth();
+  } else {
+    ts.textContent = 'Fout';
+  }
+}
+
+function addAandeel() {
+  const naam   = document.getElementById('aa-naam').value.trim();
+  const ticker = document.getElementById('aa-ticker').value.trim().toUpperCase();
+  const shares = parseFloat(document.getElementById('aa-shares').value);
+  const price  = parseFloat(document.getElementById('aa-price-inp').value);
+  const statusEl = document.getElementById('aa-status');
+
+  if (!naam)         { statusEl.style.color='var(--red)'; statusEl.textContent='Voer een naam in.'; return; }
+  if (!(shares > 0)) { statusEl.style.color='var(--red)'; statusEl.textContent='Voer een geldig aantal in.'; return; }
+  if (!(price > 0))  { statusEl.style.color='var(--red)'; statusEl.textContent='Voer een geldige koers in of haal op.'; return; }
+
+  S.aandelen.push({ id: uid(), naam, ticker, shares, pricePerShare: price, autoPrice: false });
+
+  document.getElementById('aa-naam').value      = '';
+  document.getElementById('aa-ticker').value    = '';
+  document.getElementById('aa-shares').value    = '';
+  document.getElementById('aa-price-inp').value = '';
+  statusEl.textContent = '';
+  persist();
+  renderAandelenList();
+  updateNetWorth();
+}
+
+function removeAandeel(id) {
+  S.aandelen = S.aandelen.filter(a => a.id !== id);
+  persist();
+  renderAandelenList();
+  updateNetWorth();
+}
+
+function renderAandelenList() {
+  const el = document.getElementById('aa-list');
+  if (!S.aandelen.length) {
+    el.innerHTML = '<div class="empty">Nog geen posities toegevoegd</div>';
+    document.getElementById('aa-total').textContent = '€ —';
+    return;
+  }
+  let total = 0;
+  el.innerHTML = S.aandelen.map(a => {
+    const val = a.shares * (a.pricePerShare || 0);
+    total += val;
+    return `
+      <div class="aa-item">
+        <div class="aa-info">
+          <div class="aa-name">${esc(a.naam)}${a.ticker ? ` <span style="font-size:12px;color:var(--muted);font-weight:400">${esc(a.ticker)}</span>` : ''}</div>
+          <div class="aa-sub">${fmtNum(a.shares)} aandelen · ${fmtEUR(a.pricePerShare)}/stuk <span class="aa-badge ${a.autoPrice ? 'auto' : 'manual'}">${a.autoPrice ? 'auto' : 'handmatig'}</span></div>
+        </div>
+        <div class="aa-vals">
+          <div class="aa-total">${fmtEUR(val)}</div>
+        </div>
+        <button class="btn btn-icon btn-danger del-aandeel" data-id="${esc(a.id)}" title="Verwijder">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>`;
+  }).join('');
+  document.getElementById('aa-total').textContent = fmtEUR(total);
+}
+
 // ─── REMINDER BANNERS ─────────────────────────────────────────────────────────
 
 // Returns the most recent Monday at 00:00:00 local time
@@ -1436,6 +1651,11 @@ document.getElementById('debt-list').addEventListener('click', e => {
   if (btn) removeDebt(btn.dataset.id);
 });
 
+document.getElementById('aa-list').addEventListener('click', e => {
+  const btn = e.target.closest('.del-aandeel');
+  if (btn) removeAandeel(btn.dataset.id);
+});
+
 document.getElementById('snaps-list').addEventListener('click', e => {
   const tog = e.target.closest('.toggle-snap');
   if (tog) { document.getElementById('sn-' + tog.dataset.id).classList.toggle('open'); return; }
@@ -1462,8 +1682,10 @@ function init() {
   renderDebtList();
   updateNetWorth();
   if (S.cryptos.length) fetchPrices(false);
+  renderAandelenList();
   applyStudieschuldInterest();
   renderStudieschuld();
+  fetchStockPrices(false);
   checkMissedSnapshots();
   if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('sw.js').catch(() => {});
